@@ -1,7 +1,7 @@
-import { User, IUser } from '../models/user.model';
-import { hashPassword, comparePassword } from '../utils/hash';
-import { generateAccessToken, generateRefreshToken, JWTPayload } from '../utils/jwt';
-import { TokenService } from './token.service';
+import { User, IUser } from '../models/user.model.js';
+import { hashPassword, comparePassword } from '../utils/hash.js';
+import { generateAccessToken, generateRefreshToken, JWTPayload } from '../utils/jwt.js';
+import { TokenService } from './token.service.js';
 
 export interface AuthResponse {
   accessToken: string;

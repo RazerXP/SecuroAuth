@@ -1,5 +1,5 @@
 import { Ratelimit } from '@upstash/ratelimit';
-import redis from '../config/redis';
+import redis from '../config/redis.js';
 import { Request, Response, NextFunction } from 'express';
 
 const loginLimiter = new Ratelimit({

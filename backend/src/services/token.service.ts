@@ -1,5 +1,5 @@
-import redis from '../config/redis';
-import { JWTPayload, verifyToken, generateRefreshToken } from '../utils/jwt';
+import redis from '../config/redis.js';
+import { JWTPayload, verifyToken, generateRefreshToken } from '../utils/jwt.js';
 
 export class TokenService {
   private static getRefreshTokenKey(userId: string): string {
