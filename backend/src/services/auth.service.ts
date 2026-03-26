@@ -1,6 +1,6 @@
 import { User, IUser } from '../models/user.model.js';
 import { hashPassword, comparePassword } from '../utils/hash.js';
-import { generateAccessToken, generateRefreshToken, JWTPayload } from '../utils/jwt.js';
+import { generateAccessToken, generateRefreshToken, getAccessTokenHardMaxExp, JWTPayload } from '../utils/jwt.js';
 import { TokenService } from './token.service.js';
 
 export interface AuthResponse {
@@ -32,7 +32,7 @@ export class AuthService {
       email: user.email,
     };
 
-    const accessToken = generateAccessToken(payload);
+    const accessToken = generateAccessToken(payload, { accessMaxExp: getAccessTokenHardMaxExp() });
     const refreshToken = generateRefreshToken(payload);
 
     await TokenService.storeRefreshToken(user._id.toString(), refreshToken);
@@ -64,7 +64,7 @@ export class AuthService {
       email: user.email,
     };
 
-    const accessToken = generateAccessToken(payload);
+    const accessToken = generateAccessToken(payload, { accessMaxExp: getAccessTokenHardMaxExp() });
     const refreshToken = generateRefreshToken(payload);
 
     await TokenService.storeRefreshToken(user._id.toString(), refreshToken);
@@ -79,7 +79,10 @@ export class AuthService {
     };
   }
 
-  static async refreshToken(userId: string, refreshToken: string): Promise<{ accessToken: string; refreshToken: string }> {
+  static async refreshToken(
+    userId: string,
+    refreshToken: string,
+  ): Promise<{ accessToken: string; refreshToken: string }> {
     const rotatedRefreshToken = await TokenService.validateAndRotateRefreshToken(userId, refreshToken);
     if (!rotatedRefreshToken) {
       throw new Error('Invalid refresh token');
@@ -96,7 +99,7 @@ export class AuthService {
       email: user.email,
     };
 
-    const accessToken = generateAccessToken(payload);
+    const accessToken = generateAccessToken(payload, { accessMaxExp: getAccessTokenHardMaxExp() });
 
     return {
       accessToken,

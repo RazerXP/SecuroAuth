@@ -1,5 +1,40 @@
-import { Request, Response } from 'express';
+import { Request, Response, CookieOptions } from 'express';
 import { AuthService } from '../services/auth.service.js';
+import { verifyToken, JWTPayload } from '../utils/jwt.js';
+
+const isProduction = process.env.NODE_ENV === 'production';
+const accessTokenCookieOptions: CookieOptions = {
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: 'lax',
+  maxAge: 15 * 60 * 1000,
+  path: '/',
+};
+
+const refreshTokenCookieOptions: CookieOptions = {
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: 'lax',
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+  path: '/',
+};
+
+const clearCookieOptions: CookieOptions = {
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: 'lax',
+  path: '/',
+};
+
+const setAuthCookies = (res: Response, accessToken: string, refreshToken: string) => {
+  res.cookie('accessToken', accessToken, accessTokenCookieOptions);
+  res.cookie('refreshToken', refreshToken, refreshTokenCookieOptions);
+};
+
+const clearAuthCookies = (res: Response) => {
+  res.clearCookie('accessToken', clearCookieOptions);
+  res.clearCookie('refreshToken', clearCookieOptions);
+};
 
 export class AuthController {
   static async signup(req: Request, res: Response): Promise<void> {
@@ -12,7 +47,8 @@ export class AuthController {
       }
 
       const result = await AuthService.signup(email, password);
-      res.status(201).json(result);
+      setAuthCookies(res, result.accessToken, result.refreshToken);
+      res.status(201).json({ user: result.user });
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }
@@ -28,7 +64,8 @@ export class AuthController {
       }
 
       const result = await AuthService.login(email, password);
-      res.status(200).json(result);
+      setAuthCookies(res, result.accessToken, result.refreshToken);
+      res.status(200).json({ user: result.user });
     } catch (error: any) {
       res.status(401).json({ error: error.message });
     }
@@ -36,16 +73,17 @@ export class AuthController {
 
   static async refreshToken(req: Request, res: Response): Promise<void> {
     try {
-      const { refreshToken } = req.body;
-      const userId = req.user?.userId;
+      const refreshToken = req.cookies?.refreshToken as string | undefined;
 
-      if (!refreshToken || !userId) {
-        res.status(400).json({ error: 'Refresh token and user ID required' });
+      if (!refreshToken) {
+        res.status(400).json({ error: 'Refresh token required' });
         return;
       }
 
-      const result = await AuthService.refreshToken(userId, refreshToken);
-      res.status(200).json(result);
+      const decoded = verifyToken<JWTPayload>(refreshToken);
+      const result = await AuthService.refreshToken(decoded.userId, refreshToken);
+      setAuthCookies(res, result.accessToken, result.refreshToken);
+      res.status(200).json({ message: 'Token refreshed' });
     } catch (error: any) {
       res.status(401).json({ error: error.message });
     }
@@ -53,13 +91,18 @@ export class AuthController {
 
   static async logout(req: Request, res: Response): Promise<void> {
     try {
-      const userId = req.user?.userId;
-      if (!userId) {
-        res.status(400).json({ error: 'User ID required' });
-        return;
+      const refreshToken = req.cookies?.refreshToken as string | undefined;
+
+      if (refreshToken) {
+        try {
+          const decoded = verifyToken<JWTPayload>(refreshToken);
+          await AuthService.logout(decoded.userId);
+        } catch {
+          // Always clear cookies even when refresh token is invalid/expired.
+        }
       }
 
-      await AuthService.logout(userId);
+      clearAuthCookies(res);
       res.status(200).json({ message: 'Logged out successfully' });
     } catch (error: any) {
       res.status(500).json({ error: error.message });

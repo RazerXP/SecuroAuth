@@ -41,33 +41,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Set up axios interceptors for token handling
   useEffect(() => {
-    const requestInterceptor = api.interceptors.request.use(
-      (config: InternalAxiosRequestConfig) => {
-        const token = localStorage.getItem('accessToken');
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-      },
-      (error: AxiosError) => Promise.reject(error)
-    );
-
     const responseInterceptor = api.interceptors.response.use(
       (response: AxiosResponse) => response,
       async (error: AxiosError<unknown, RetryAxiosRequestConfig>) => {
         const config = error.config as RetryAxiosRequestConfig | undefined;
+        const isRefreshRequest = config?.url?.includes('/auth/refresh');
 
-        if (error.response?.status === 403 && config && !config._retry) {
+        if (error.response?.status === 403 && config && !config._retry && !isRefreshRequest) {
           config._retry = true;
 
           try {
             await refreshToken();
-            const token = localStorage.getItem('accessToken');
-
-            if (config.headers) {
-              config.headers.Authorization = `Bearer ${token}`;
-            }
-
             return api(config);
           } catch (refreshError) {
             await logout();
@@ -80,43 +64,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     );
 
     return () => {
-      api.interceptors.request.eject(requestInterceptor);
       api.interceptors.response.eject(responseInterceptor);
     };
   }, []);
 
   // Check if user is logged in on mount
   useEffect(() => {
-    const token = localStorage.getItem('accessToken');
-    if (token) {
-      // Verify token by calling /auth/me
-      api.get('/auth/me')
-        .then((response: AxiosResponse) => {
-          setUser(response.data.user);
-        })
-        .catch(() => {
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
-        })
-        .finally(() => setIsLoading(false));
-    } else {
-      setIsLoading(false);
-    }
+    api.get('/auth/me')
+      .then((response: AxiosResponse) => {
+        setUser(response.data.user);
+      })
+      .catch(() => {
+        setUser(null);
+      })
+      .finally(() => setIsLoading(false));
   }, []);
 
   const login = async (email: string, password: string) => {
     const response = await api.post('/auth/login', { email, password });
-    const { accessToken, refreshToken, user: userData } = response.data;
-    localStorage.setItem('accessToken', accessToken);
-    localStorage.setItem('refreshToken', refreshToken);
+    const { user: userData } = response.data;
     setUser(userData);
   };
 
   const signup = async (email: string, password: string) => {
     const response = await api.post('/auth/signup', { email, password });
-    const { accessToken, refreshToken, user: userData } = response.data;
-    localStorage.setItem('accessToken', accessToken);
-    localStorage.setItem('refreshToken', refreshToken);
+    const { user: userData } = response.data;
     setUser(userData);
   };
 
@@ -126,22 +98,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
       setUser(null);
     }
   };
 
   const refreshToken = async () => {
-    const refreshToken = localStorage.getItem('refreshToken');
-    if (!refreshToken) throw new Error('No refresh token');
-
-    const response = await api.post('/auth/refresh', { refreshToken });
-    const { accessToken, refreshToken: newRefreshToken } = response.data;
-    localStorage.setItem('accessToken', accessToken);
-    if (newRefreshToken) {
-      localStorage.setItem('refreshToken', newRefreshToken);
-    }
+    await api.post('/auth/refresh');
   };
 
   const value: AuthContextType = {

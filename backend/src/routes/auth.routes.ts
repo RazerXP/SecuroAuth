@@ -8,10 +8,10 @@ const router = Router();
 // public routes
 router.post('/signup', rateLimitSignup, AuthController.signup);
 router.post('/login', rateLimitLogin, AuthController.login);
+router.post('/refresh', AuthController.refreshToken);
+router.post('/logout', AuthController.logout);
 
 // protected routes
-router.post('/refresh', authenticateToken, AuthController.refreshToken);
-router.post('/logout', authenticateToken, AuthController.logout);
 router.get('/me', authenticateToken, AuthController.getMe);
 
 // TODO: Password reset

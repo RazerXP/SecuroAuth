@@ -6,16 +6,17 @@
 [![License](https://img.shields.io/badge/License-ISC-blue.svg)](LICENSE)
 
 Full-stack authentication app with a TypeScript Express API and React frontend.
-It supports signup/login, JWT access and refresh tokens, Redis-backed refresh token rotation, and IP-based rate limiting for auth endpoints.
+It supports signup/login, cookie-based JWT auth, Redis-backed refresh token rotation, and IP-based rate limiting for auth endpoints.
 
 ## Features
 
 - Email/password signup and login
-- JWT access token authentication
-- Refresh token rotation with server-side validation
-- Logout by token invalidation in Redis
+- HTTP-only cookie authentication (`accessToken`, `refreshToken`)
+- Sliding access-token rotation (middleware-driven)
+- Refresh token rotation with server-side validation in Redis
+- Logout by server-side token invalidation and cookie clearing
 - Rate limiting for signup and login endpoints
-- React frontend with Axios interceptors and auto refresh flow
+- React frontend with Axios `withCredentials` and auto refresh flow
 
 ## Tech Stack
 
@@ -80,6 +81,8 @@ MONGO_URI=mongodb://localhost:27017/auth-system
 
 JWT_SECRET=replace-with-a-strong-secret
 
+CLIENT_URL=http://localhost:5173
+
 REDIS_URL=https://<your-upstash-url>
 REDIS_TOKEN=<your-upstash-token>
 ```
@@ -117,6 +120,17 @@ Notes:
 - Root `start` runs the backend from `backend/dist/server.js`.
 - In production mode, backend serves `frontend/dist` as static files.
 
+## Authentication Model
+
+- Tokens are set as HTTP-only cookies by the backend.
+- Frontend never stores tokens in localStorage.
+- Access token lifetime is 15 minutes per token.
+- Access token has a hard max lifetime of 24 hours per issuance window.
+- A new window is created when a new access token is issued on signup, login, or refresh.
+- Access token is rotated automatically in auth middleware after ~10 minutes of token age (while still under hard max).
+- Refresh token lifetime is 7 days and is rotated on `/auth/refresh`.
+- Redis stores/validates refresh token state to enforce rotation and invalidation.
+
 ## API Endpoints
 
 Base URL: `http://localhost:3000`
@@ -125,9 +139,9 @@ Base URL: `http://localhost:3000`
 | --- | --- | --- | --- |
 | POST | `/auth/signup` | Register new user | No |
 | POST | `/auth/login` | Login user | No |
-| POST | `/auth/refresh` | Rotate refresh token and issue new access token | Yes (Bearer access token) |
-| POST | `/auth/logout` | Logout and invalidate refresh token | Yes (Bearer access token) |
-| GET | `/auth/me` | Get current user profile | Yes (Bearer access token) |
+| POST | `/auth/refresh` | Rotate refresh token and issue new access token cookies | Cookie (`refreshToken`) |
+| POST | `/auth/logout` | Logout and invalidate refresh token | Cookie (`refreshToken`) |
+| GET | `/auth/me` | Get current user profile | Cookie (`accessToken`) |
 
 ## Request Examples
 
@@ -151,30 +165,38 @@ Get profile:
 
 ```bash
 curl -X GET http://localhost:3000/auth/me \
-   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+   -b cookies.txt
 ```
 
 Refresh token:
 
 ```bash
 curl -X POST http://localhost:3000/auth/refresh \
-   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+   -b cookies.txt -c cookies.txt
+```
+
+Login and persist cookies:
+
+```bash
+curl -X POST http://localhost:3000/auth/login \
    -H "Content-Type: application/json" \
-   -d '{"refreshToken":"YOUR_REFRESH_TOKEN"}'
+   -d '{"email":"user@example.com","password":"securepassword"}' \
+   -c cookies.txt
 ```
 
 ## Frontend Auth Flow
 
-- Tokens are stored in localStorage (`accessToken`, `refreshToken`).
-- Axios request interceptor sends `Authorization: Bearer <accessToken>`.
+- Axios client uses `withCredentials: true` so browser cookies are sent automatically.
+- On app load, frontend calls `/auth/me` to derive current auth state.
 - On `403`, the frontend attempts `/auth/refresh` once and retries the failed request.
-- If refresh fails, local tokens are cleared and user is logged out.
+- If refresh fails, frontend calls logout and clears in-memory user state.
 
 ## Security Notes
 
 - Login rate limit: 5 requests per minute per IP.
 - Signup rate limit: 3 requests per hour per IP.
 - Passwords are hashed with bcrypt.
+- Access and refresh tokens are HTTP-only cookies.
 - Refresh tokens are validated and rotated via Redis.
 
 ## License

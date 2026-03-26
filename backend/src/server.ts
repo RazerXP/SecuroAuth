@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import path from "path";
 
 import connectDB from './config/db.js';
@@ -8,10 +9,17 @@ import authRoutes from './routes/auth.routes.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 const __dirname = path.resolve();
 
 // Middleware
-app.use(cors());
+if (process.env.NODE_ENV === "development") {
+  app.use(cors({
+    origin: CLIENT_URL,
+    credentials: true,
+  }));
+}
+app.use(cookieParser());
 app.use(express.json());
 
 app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
