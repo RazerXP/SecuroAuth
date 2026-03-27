@@ -6,16 +6,18 @@
 [![License](https://img.shields.io/badge/License-ISC-blue.svg)](LICENSE)
 
 Full-stack authentication app with a TypeScript Express API and React frontend.
-It supports signup/login, cookie-based JWT auth, Redis-backed refresh token rotation, and IP-based rate limiting for auth endpoints.
+It supports signup/login, secure password reset with email notifications, cookie-based JWT auth, Redis-backed token state, and IP-based rate limiting for auth endpoints.
 
 ## Features
 
 - Email/password signup and login
+- Forgot-password and reset-password flow with one-time reset tokens
+- Password reset email notifications via Resend
 - HTTP-only cookie authentication (`accessToken`, `refreshToken`)
 - Sliding access-token rotation (middleware-driven)
 - Refresh token rotation with server-side validation in Redis
 - Logout by server-side token invalidation and cookie clearing
-- Rate limiting for signup and login endpoints
+- Rate limiting for signup, login, forgot-password, and reset-password endpoints
 - React frontend with Axios `withCredentials` and auto refresh flow
 
 ## Tech Stack
@@ -41,6 +43,7 @@ It supports signup/login, cookie-based JWT auth, Redis-backed refresh token rota
 - Node.js 18+
 - MongoDB connection string
 - Upstash Redis URL and token
+- Resend API key (for password reset emails)
 
 ## Project Structure
 
@@ -85,6 +88,8 @@ CLIENT_URL=http://localhost:5173
 
 REDIS_URL=https://<your-upstash-url>
 REDIS_TOKEN=<your-upstash-token>
+
+RESEND_API_KEY=<your-resend-api-key>
 ```
 
 ## Installation
@@ -130,6 +135,7 @@ Notes:
 - Access token is rotated automatically in auth middleware after ~10 minutes of token age (while still under hard max).
 - Refresh token lifetime is 7 days and is rotated on `/auth/refresh`.
 - Redis stores/validates refresh token state to enforce rotation and invalidation.
+- Password reset tokens are random, SHA-256 hashed, stored in Redis for 15 minutes, and consumed once.
 
 ## API Endpoints
 
@@ -139,6 +145,8 @@ Base URL: `http://localhost:3000`
 | --- | --- | --- | --- |
 | POST | `/auth/signup` | Register new user | No |
 | POST | `/auth/login` | Login user | No |
+| POST | `/auth/forgot-password` | Request password reset link | No |
+| POST | `/auth/reset-password` | Reset password using reset token | No |
 | POST | `/auth/refresh` | Rotate refresh token and issue new access token cookies | Cookie (`refreshToken`) |
 | POST | `/auth/logout` | Logout and invalidate refresh token | Cookie (`refreshToken`) |
 | GET | `/auth/me` | Get current user profile | Cookie (`accessToken`) |
@@ -159,6 +167,22 @@ Login:
 curl -X POST http://localhost:3000/auth/login \
    -H "Content-Type: application/json" \
    -d '{"email":"user@example.com","password":"securepassword"}'
+```
+
+Forgot password:
+
+```bash
+curl -X POST http://localhost:3000/auth/forgot-password \
+   -H "Content-Type: application/json" \
+   -d '{"email":"user@example.com"}'
+```
+
+Reset password:
+
+```bash
+curl -X POST http://localhost:3000/auth/reset-password \
+   -H "Content-Type: application/json" \
+   -d '{"token":"<reset-token>","newPassword":"newsecurepassword"}'
 ```
 
 Get profile:
@@ -190,14 +214,19 @@ curl -X POST http://localhost:3000/auth/login \
 - On app load, frontend calls `/auth/me` to derive current auth state.
 - On `403`, the frontend attempts `/auth/refresh` once and retries the failed request.
 - If refresh fails, frontend calls logout and clears in-memory user state.
+- Login screen can switch to forgot-password view and submit reset requests.
+- Reset links open frontend with `/?view=reset&token=<token>`, which renders the reset-password form.
 
 ## Security Notes
 
 - Login rate limit: 5 requests per minute per IP.
 - Signup rate limit: 3 requests per hour per IP.
+- Forgot-password rate limit: 5 requests per 24 hours per IP.
+- Reset-password rate limit: 5 requests per 24 hours per IP.
 - Passwords are hashed with bcrypt.
 - Access and refresh tokens are HTTP-only cookies.
 - Refresh tokens are validated and rotated via Redis.
+- Reset tokens are SHA-256 hashed, short-lived in Redis, and invalidated after first use.
 
 ## License
 
