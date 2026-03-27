@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
 import { useAuth } from './AuthContext';
 
-const Login: React.FC = () => {
+interface LoginProps {
+  onForgotPassword: () => void;
+}
+
+const Login: React.FC<LoginProps> = ({ onForgotPassword }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -51,6 +55,9 @@ const Login: React.FC = () => {
           {isLoading ? 'Logging in...' : 'Login'}
         </button>
       </form>
+      <button className="text-link-button" onClick={onForgotPassword}>
+        Forgot your password?
+      </button>
     </div>
   );
 };

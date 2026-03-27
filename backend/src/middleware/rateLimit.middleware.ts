@@ -14,6 +14,18 @@ const signupLimiter = new Ratelimit({
   analytics: true,
 });
 
+const forgotPasswordLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(5, '24 h'),
+  analytics: true,
+});
+
+const resetPasswordLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(5, '24 h'),
+  analytics: true,
+});
+
 export const rateLimitLogin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const ip = req.ip || req.socket.remoteAddress || '';
   const { success } = await loginLimiter.limit(ip);
@@ -32,6 +44,38 @@ export const rateLimitSignup = async (req: Request, res: Response, next: NextFun
 
   if (!success) {
     res.status(429).json({ error: 'Too many signup attempts. Please try again later.' });
+    return;
+  }
+
+  next();
+};
+
+export const rateLimitForgotPassword = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  const ip = req.ip || req.socket.remoteAddress || '';
+  const { success } = await forgotPasswordLimiter.limit(`forgot:${ip}`);
+
+  if (!success) {
+    res.status(429).json({ error: 'Too many password reset requests. Please try again later.' });
+    return;
+  }
+
+  next();
+};
+
+export const rateLimitResetPassword = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  const ip = req.ip || req.socket.remoteAddress || '';
+  const { success } = await resetPasswordLimiter.limit(`reset:${ip}`);
+
+  if (!success) {
+    res.status(429).json({ error: 'Too many reset attempts. Please try again later.' });
     return;
   }
 

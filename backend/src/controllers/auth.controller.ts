@@ -1,6 +1,7 @@
 import { Request, Response, CookieOptions } from 'express';
 import { AuthService } from '../services/auth.service.js';
 import { verifyToken, JWTPayload } from '../utils/jwt.js';
+import { sendResetMail } from '../utils/resetMail.js';
 
 const isProduction = process.env.NODE_ENV === 'production';
 const accessTokenCookieOptions: CookieOptions = {
@@ -132,6 +133,48 @@ export class AuthController {
       });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
+    }
+  }
+
+  static async forgotPassword(req: Request, res: Response): Promise<void> {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        res.status(400).json({ error: 'Email is required' });
+        return;
+      }
+
+      const result = await AuthService.forgotPassword(email);
+
+      if (result.resetUrl) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`Password reset link for ${email}: ${result.resetUrl}`);
+        }
+        sendResetMail(email, result.resetUrl);
+      }
+
+      res.status(200).json({
+        message: 'If an account exists, a reset link has been sent.',
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  static async resetPassword(req: Request, res: Response): Promise<void> {
+    try {
+      const { token, newPassword } = req.body;
+
+      if (!token || !newPassword) {
+        res.status(400).json({ error: 'Token and new password are required' });
+        return;
+      }
+
+      await AuthService.resetPassword(token, newPassword);
+      clearAuthCookies(res);
+      res.status(200).json({ message: 'Password reset successful' });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
     }
   }
 }

@@ -22,7 +22,7 @@ export const authenticateToken = (req: Request, res: Response, next: NextFunctio
   const token = req.cookies?.accessToken as string | undefined;
 
   if (!token) {
-    res.status(401).json({ error: 'Access token required' });
+    res.status(403).json({ error: 'Access token required' });
     return;
   }
 

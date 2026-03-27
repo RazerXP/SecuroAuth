@@ -45,9 +45,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       (response: AxiosResponse) => response,
       async (error: AxiosError<unknown, RetryAxiosRequestConfig>) => {
         const config = error.config as RetryAxiosRequestConfig | undefined;
-        const isRefreshRequest = config?.url?.includes('/auth/refresh');
+        const isGetMe = config?.url?.includes('/auth/me');
 
-        if (error.response?.status === 403 && config && !config._retry && !isRefreshRequest) {
+        if (error.response?.status === 403 && config && !config._retry && isGetMe) {
           config._retry = true;
 
           try {

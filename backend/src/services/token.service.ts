@@ -6,6 +6,10 @@ export class TokenService {
     return `refresh_token:${userId}`;
   }
 
+  private static getResetTokenKey(userId: string): string {
+    return `reset_token:${userId}`;
+  }
+
   static async storeRefreshToken(userId: string, token: string): Promise<void> {
     const key = this.getRefreshTokenKey(userId);
     // store for 7d + 1h
@@ -20,6 +24,18 @@ export class TokenService {
   static async deleteRefreshToken(userId: string): Promise<void> {
     const key = this.getRefreshTokenKey(userId);
     await redis.del(key);
+  }
+
+  static async storeResetToken(userId: string, token: string): Promise<void> {
+    const key = this.getResetTokenKey(token);
+    await redis.set(key, userId, { ex: 15 * 60 }); // 15 minutes
+  }
+
+  static async getAndDeleteResetToken(token: string): Promise<string | null> {
+    const key = this.getResetTokenKey(token);
+    const userId = await redis.get(key) as string | null;
+    await redis.del(key);
+    return userId;
   }
 
   static async validateAndRotateRefreshToken(userId: string, providedToken: string): Promise<string | null> {
